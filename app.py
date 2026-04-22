@@ -7,22 +7,14 @@ from prophet import Prophet
 from statsmodels.tsa.arima.model import ARIMA
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-
-try:
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import LSTM, Dense
-except ImportError:
-    st.error("Please install tensorflow: pip install tensorflow-cpu")
 
 warnings.filterwarnings("ignore")
 
 st.set_page_config(page_title="BTC Forecaster", layout="wide")
 st.markdown("<style>.stApp{margin-top:-40px}.stButton>button{width:100%;border-radius:5px;font-weight:bold}</style>", unsafe_allow_html=True)
 st.title("Bitcoin Price Forecasting")
-st.markdown("Upload your Kaggle CSV to train ML, DL, and Statistical models on the fly.")
-
+st.markdown("Upload your Kaggle CSV to train Machine Learning and Statistical models on the fly.")
 
 @st.cache_data
 def load_data(file):
@@ -108,43 +100,6 @@ def run_ml_ensemble(train, test, full, col, horizon, conf):
                          'yhat_lower': yhat - margin, 'yhat_upper': yhat + margin}), mae, rmse
 
 
-def run_lstm(train, test, full, col, horizon, conf):
-    scaler, lookback = MinMaxScaler(), 30
-
-    def make_sequences(data):
-        s = scaler.fit_transform(data[[col]])
-        X = [s[i - lookback:i, 0] for i in range(lookback, len(s))]
-        return np.array(X).reshape(-1, lookback, 1), s[lookback:]
-
-    def build_model():
-        m = Sequential([LSTM(50, activation='relu', input_shape=(lookback, 1)), Dense(1)])
-        m.compile(optimizer='adam', loss='mse')
-        return m
-
-    X_tr, y_tr = make_sequences(train)
-    model = build_model()
-    model.fit(X_tr, y_tr, epochs=5, batch_size=32, verbose=0)
-
-    test_in = scaler.transform(pd.concat([train.iloc[-lookback:], test])[[col]])
-    X_ts = np.array([test_in[i - lookback:i, 0] for i in range(lookback, len(test_in))]).reshape(-1, lookback, 1)
-    mae, rmse = metrics(test[col].values, scaler.inverse_transform(model.predict(X_ts, verbose=0)).flatten())
-
-    X_full, y_full = make_sequences(full)
-    model.fit(X_full, y_full, epochs=3, batch_size=32, verbose=0)
-
-    batch = scaler.transform(full[[col]])[-lookback:].reshape(1, lookback, 1)
-    preds = []
-    for _ in range(horizon):
-        p = model.predict(batch, verbose=0)[0]
-        preds.append(p[0])
-        batch = np.append(batch[:, 1:, :], [[p]], axis=1)
-
-    yhat = scaler.inverse_transform(np.array(preds).reshape(-1, 1)).flatten()
-    margin = z(conf) * full[col].pct_change().std() * full[col].iloc[-1] * np.sqrt(np.arange(1, horizon + 1))
-    return pd.DataFrame({'ds': future_dates(full, horizon), 'yhat': yhat,
-                         'yhat_lower': yhat - margin, 'yhat_upper': yhat + margin}), mae, rmse
-
-
 # Sidebar
 with st.sidebar:
     st.header("Configuration")
@@ -153,7 +108,7 @@ with st.sidebar:
         df, p_cols = load_data(file)
         if df is not None:
             col = st.selectbox("Target Price", p_cols)
-            model_type = st.selectbox("Algorithm", ["Prophet", "ARIMA", "ML Ensemble (LR+RF)", "Deep Learning (LSTM)"])
+            model_type = st.selectbox("Algorithm", ["Prophet", "ARIMA", "ML Ensemble (LR+RF)"])
             horizon = st.slider("Horizon (Days)", 7, 90, 30)
             conf = st.selectbox("Confidence %", [80, 95], index=1)
             show_ma = st.toggle("Overlay Moving Averages")
@@ -169,8 +124,7 @@ if file and df is not None:
             runners = {
                 "Prophet": run_prophet,
                 "ARIMA": run_arima,
-                "ML Ensemble (LR+RF)": run_ml_ensemble,
-                "Deep Learning (LSTM)": run_lstm,
+                "ML Ensemble (LR+RF)": run_ml_ensemble
             }
             fc, mae, rmse = runners[model_type](train, test, df, col, horizon, conf)
 
