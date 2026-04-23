@@ -1,0 +1,10 @@
+[server]
+maxUploadSize = 1000  # Sets the limit to 1000 MB (1 GB)
+
+
+[theme]
+primaryColor = "#F7931A"
+backgroundColor = "#121212"
+secondaryBackgroundColor = "#1E1E1E"
+textColor = "#E0E0E0"
+font = "sans serif"
